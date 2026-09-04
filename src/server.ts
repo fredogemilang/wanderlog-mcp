@@ -559,6 +559,12 @@ export function buildServer(ctx: AppContext): McpServer {
       title: "Add a custom section to a Wanderlog trip",
       description: addSectionDescription,
       inputSchema: addSectionInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     requireAuth(ctx, async (args) =>
       addSection(ctx, args as Parameters<typeof addSection>[1])),
@@ -570,6 +576,12 @@ export function buildServer(ctx: AppContext): McpServer {
       title: "Rename a custom section in a Wanderlog trip",
       description: updateSectionDescription,
       inputSchema: updateSectionInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     requireAuth(ctx, async (args) =>
       updateSection(ctx, args as Parameters<typeof updateSection>[1])),
@@ -581,6 +593,12 @@ export function buildServer(ctx: AppContext): McpServer {
       title: "Delete a custom section from a Wanderlog trip",
       description: deleteSectionDescription,
       inputSchema: deleteSectionInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     requireAuth(ctx, async (args) =>
       deleteSection(ctx, args as Parameters<typeof deleteSection>[1])),

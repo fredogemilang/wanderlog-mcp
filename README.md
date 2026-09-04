@@ -18,6 +18,7 @@ The agent calls the tools, interleaves places and notes for each day, adds hotel
 
 ## What's New (Unreleased)
 
+- Custom-list lifecycle operations now reject duplicate or ambiguous section headings instead of silently changing the first match.
 - `wanderlog_search_hotels` — search Wanderlog's hotel aggregator across airbnb, expedia, google, and kayak. Returns ranked offers with per-vendor price comparison and faceted filter discovery so the LLM never has to memorise Wanderlog's internal enum values.
 - A failed startup authentication probe now gets one shared retry on the first tool call, allowing valid sessions to recover from a transient network or proxy error without restarting the server.
 
@@ -110,10 +111,21 @@ and a ryokan in Shinjuku."
 | `wanderlog_remove_place` | Remove a place by natural-language reference |
 | `wanderlog_update_trip_dates` | Change a trip's date range |
 | `wanderlog_rename_day` | Rename a day's heading (e.g. `"Barcelona"` → `"Arrival — Feria de Abril"`) |
+| `wanderlog_add_section` | Create a uniquely named custom list, optionally after another section |
+| `wanderlog_update_section` | Rename a custom list while preventing duplicate headings |
+| `wanderlog_delete_section` | Permanently delete a custom list and all blocks inside it |
 | `wanderlog_list_journal` | List journal (travelogue) stops, optionally filtered by title or date |
 | `wanderlog_add_journal` | Add a journal stop: a place + date/time + text entry |
 | `wanderlog_edit_journal` | Edit a journal stop's title, text, or date/time (or the journal summary) |
 | `wanderlog_remove_journal` | Remove a journal stop by title (with an optional date filter) |
+
+### Managing custom lists
+
+Custom sections are undated lists outside Wanderlog's protected default/system sections.
+Create one with `wanderlog_add_section`, rename it with `wanderlog_update_section`, and delete
+it with `wanderlog_delete_section`. Deleting is destructive: every block in that section is
+removed. Section headings used by these tools must be unique (matching ignores case); ambiguous
+or duplicate targets return errors without submitting a mutation.
 
 ## Prerequisites
 
