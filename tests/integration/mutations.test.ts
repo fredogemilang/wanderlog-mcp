@@ -6,6 +6,7 @@ import { addNote } from "../../src/tools/add-note.ts";
 import { addPlace } from "../../src/tools/add-place.ts";
 import { createTrip } from "../../src/tools/create-trip.ts";
 import { getTrip } from "../../src/tools/get-trip.ts";
+import { moveBlock } from "../../src/tools/move-block.ts";
 import { removePlace } from "../../src/tools/remove-place.ts";
 import { updateTripDates } from "../../src/tools/update-trip-dates.ts";
 import { isChecklistBlock, isPlaceBlock } from "../../src/types.ts";
@@ -95,6 +96,85 @@ describe("Mutation tools (live round-trip)", () => {
     );
     expect(foundInDay1).toBe(true);
   }, 30_000);
+
+  it("move_block reorders day places in both directions without changing their blocks", async () => {
+    expect(tripKey).toBeDefined();
+    for (const place of ["Praça do Comércio", "Elevador de Santa Justa"]) {
+      const addResult = await addPlace(ctx, {
+        trip_key: tripKey!,
+        place,
+        day: "day 1",
+        start_time: place === "Praça do Comércio" ? "11:00" : "13:00",
+        end_time: place === "Praça do Comércio" ? "12:00" : "14:00",
+        note: `Integration metadata for ${place}`,
+      });
+      if (addResult.isError) {
+        throw new Error(`add_place failed: ${addResult.content[0]!.text}`);
+      }
+    }
+
+    const before = await ctx.rest.getTrip(tripKey!);
+    const beforeDay = before.itinerary.sections.find(
+      (section) => section.mode === "dayPlan" && section.date === "2099-01-01",
+    )!;
+    const originalBlocks = beforeDay.blocks.map((block) => structuredClone(block));
+    const originalIds = originalBlocks.map((block) => block.id);
+    expect(originalIds).toHaveLength(3);
+    expect(originalBlocks.every(isPlaceBlock)).toBe(true);
+    const firstName = isPlaceBlock(originalBlocks[0]!)
+      ? originalBlocks[0]!.place.name
+      : "";
+    const secondName = isPlaceBlock(originalBlocks[1]!)
+      ? originalBlocks[1]!.place.name
+      : "";
+    const thirdName = isPlaceBlock(originalBlocks[2]!)
+      ? originalBlocks[2]!.place.name
+      : "";
+
+    const backward = await moveBlock(ctx, {
+      trip_key: tripKey!,
+      block: thirdName,
+      before: firstName,
+    });
+    if (backward.isError) {
+      throw new Error(`move_block backward failed: ${backward.content[0]!.text}`);
+    }
+
+    const afterBackward = await ctx.rest.getTrip(tripKey!);
+    const backwardBlocks = afterBackward.itinerary.sections.find(
+      (section) => section.mode === "dayPlan" && section.date === "2099-01-01",
+    )!.blocks;
+    expect(backwardBlocks.map((block) => block.id)).toEqual([
+      originalIds[2],
+      originalIds[0],
+      originalIds[1],
+    ]);
+    for (const original of originalBlocks) {
+      expect(backwardBlocks.find((block) => block.id === original.id)).toEqual(
+        original,
+      );
+    }
+
+    const forward = await moveBlock(ctx, {
+      trip_key: tripKey!,
+      block: thirdName,
+      after: secondName,
+    });
+    if (forward.isError) {
+      throw new Error(`move_block forward failed: ${forward.content[0]!.text}`);
+    }
+
+    const afterForward = await ctx.rest.getTrip(tripKey!);
+    const forwardBlocks = afterForward.itinerary.sections.find(
+      (section) => section.mode === "dayPlan" && section.date === "2099-01-01",
+    )!.blocks;
+    expect(forwardBlocks.map((block) => block.id)).toEqual(originalIds);
+    for (const original of originalBlocks) {
+      expect(forwardBlocks.find((block) => block.id === original.id)).toEqual(
+        original,
+      );
+    }
+  }, 90_000);
 
   it("add_hotel adds a hotel with a check-in window", async () => {
     expect(tripKey).toBeDefined();

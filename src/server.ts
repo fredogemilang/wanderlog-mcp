@@ -62,6 +62,11 @@ import {
   removePlaceInputSchema,
 } from "./tools/remove-place.js";
 import {
+  moveBlock,
+  moveBlockDescription,
+  moveBlockInputSchema,
+} from "./tools/move-block.js";
+import {
   searchPlaces,
   searchPlacesDescription,
   searchPlacesInputSchema,
@@ -465,6 +470,16 @@ export function buildServer(ctx: AppContext): McpServer {
       inputSchema: removePlaceInputSchema,
     },
     requireAuth(ctx, async (args) => removePlace(ctx, args as Parameters<typeof removePlace>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_move_block",
+    {
+      title: "Move a block within its itinerary section",
+      description: moveBlockDescription,
+      inputSchema: moveBlockInputSchema,
+    },
+    requireAuth(ctx, async (args) => moveBlock(ctx, args as Parameters<typeof moveBlock>[1])),
   );
 
   server.registerTool(

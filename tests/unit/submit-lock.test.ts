@@ -218,4 +218,5 @@ describe("submitOp per-trip mutation transaction", () => {
     expect(fake.counts().invalidateCount).toBe(0);
     await expect(submitOp(fake.ctx, "tripA", increment)).resolves.toBeUndefined();
   });
+
 });

@@ -108,6 +108,7 @@ and a ryokan in Shinjuku."
 | `wanderlog_edit_expense` | Change a budget expense's description, amount, currency, category, or date |
 | `wanderlog_annotate_place` | Update an existing place with a note, start/end time, or both |
 | `wanderlog_remove_place` | Remove a place by natural-language reference |
+| `wanderlog_move_block` | Move an existing place or reservation block within its current section |
 | `wanderlog_update_trip_dates` | Change a trip's date range |
 | `wanderlog_rename_day` | Rename a day's heading (e.g. `"Barcelona"` → `"Arrival — Feria de Abril"`) |
 | `wanderlog_list_journal` | List journal (travelogue) stops, optionally filtered by title or date |
