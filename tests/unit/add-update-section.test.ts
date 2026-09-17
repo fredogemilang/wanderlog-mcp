@@ -116,15 +116,32 @@ describe("findSectionByRef", () => {
 
   it("returns null instead of choosing the first duplicate heading", () => {
     const trip = fresh(checklistTrip);
-    trip.itinerary.sections.unshift({
+    for (const id of [98, 99]) {
+      trip.itinerary.sections.unshift({
+        id,
+        type: "normal",
+        mode: "placeList",
+        heading: "Food",
+        date: null,
+        blocks: [],
+      });
+    }
+    expect(findSectionByRef(trip, "Food")).toBeNull();
+  });
+
+  it("resolves the 'notes' alias by section identity even when a custom list shares the heading", () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections.push({
       id: 99,
-      type: "textOnly",
+      type: "normal",
       mode: "placeList",
       heading: "Notes",
       date: null,
       blocks: [],
     });
-    expect(findSectionByRef(trip, "Notes")).toBeNull();
+    const result = findSectionByRef(trip, "notes");
+    expect(result).not.toBeNull();
+    expect(result!.section.type).toBe("textOnly");
   });
 });
 
@@ -329,18 +346,20 @@ describe("custom section lifecycle safety", () => {
 
   it("rejects ambiguous and day-section delete targets", async () => {
     const trip = fresh(checklistTrip);
-    trip.itinerary.sections.unshift({
-      id: 99,
-      type: "textOnly",
-      mode: "placeList",
-      heading: "Notes",
-      date: null,
-      blocks: [],
-    });
+    for (const id of [98, 99]) {
+      trip.itinerary.sections.unshift({
+        id,
+        type: "normal",
+        mode: "placeList",
+        heading: "Food",
+        date: null,
+        blocks: [],
+      });
+    }
     const ambiguous = makeFakeContext(trip);
     const ambiguousResult = await deleteSection(ambiguous.ctx, {
       trip_key: "T",
-      section: "Notes",
+      section: "Food",
     });
     expect(ambiguousResult.isError).toBe(true);
     expect(ambiguousResult.content[0]!.text).toContain("ambiguous");

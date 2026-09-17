@@ -194,7 +194,7 @@ export function resolveSectionRef(trip: TripPlan, ref: string): SectionRefResult
   }
   if (normalized === "notes" || normalized === "note") {
     const notes = findNotesSection(trip);
-    if (notes) return notes;
+    if (notes) return { kind: "unique", match: notes };
   }
 
   const candidates: SectionMatch[] = [];
