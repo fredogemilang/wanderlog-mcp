@@ -4,8 +4,10 @@ import { WanderlogError, WanderlogValidationError } from "../errors.js";
 import type { Json0Op } from "../ot/apply.js";
 import { resolveDay } from "../resolvers/day.js";
 import type {
+  AirportEndpoint,
   Block,
   ChecklistItem,
+  FlightBlock,
   Geo,
   PlaceData,
   RentalCarEndpoint,
@@ -330,6 +332,18 @@ export function findHotelsSection(trip: TripPlan): {
   return null;
 }
 
+/** Finds the first flights-type section in the trip. */
+export function findFlightsSection(trip: TripPlan): {
+  index: number;
+  section: Section;
+} | null {
+  for (let i = 0; i < trip.itinerary.sections.length; i++) {
+    const s = trip.itinerary.sections[i]!;
+    if (s.type === "flights") return { index: i, section: s };
+  }
+  return null;
+}
+
 /**
  * Finds a day section by ISO date. Returns null if no matching section exists
  * (e.g. the date is outside the trip range).
@@ -516,10 +530,68 @@ export function buildRentalCarBlock(
   return block as unknown as Block;
 }
 
+export function buildFlightBlock(
+  userId: number,
+  args: {
+    airline?: string | { name?: string; iata?: string };
+    flightNumber?: number | string;
+    flight_number?: number | string;
+    flightInfo?: {
+      airline?: { name?: string; iata?: string };
+      number?: number | string;
+    };
+    depart: AirportEndpoint;
+    arrive: AirportEndpoint;
+    confirmationNumber?: string;
+    confirmation_number?: string;
+    travelerNames?: string[];
+    traveler_names?: string[];
+    notes?: string;
+  },
+): FlightBlock {
+  const flightNumber = args.flightInfo?.number ?? args.flightNumber ?? args.flight_number;
+  let airlineObj: { name?: string; iata?: string } | undefined = args.flightInfo?.airline;
+  if (!airlineObj && args.airline) {
+    if (typeof args.airline === "object") {
+      airlineObj = args.airline;
+    } else {
+      const trimmed = args.airline.trim();
+      if (/^[A-Za-z0-9]{2}$/.test(trimmed)) {
+        airlineObj = { iata: trimmed.toUpperCase() };
+      } else {
+        airlineObj = { name: trimmed };
+      }
+    }
+  }
+
+  const flightInfo: { airline?: { name?: string; iata?: string }; number?: number | string } = {};
+  if (airlineObj) flightInfo.airline = airlineObj;
+  if (flightNumber !== undefined) flightInfo.number = flightNumber;
+
+  const block: Record<string, unknown> = {
+    id: generateBlockId(),
+    type: "flight",
+    flightInfo,
+    depart: args.depart,
+    arrive: args.arrive,
+    addedBy: { type: "user", userId },
+    text: { ops: [{ insert: args.notes ? `${args.notes}\n` : "\n" }] },
+    attachments: [],
+  };
+  const confirmationNumber = args.confirmationNumber ?? args.confirmation_number;
+  if (confirmationNumber) block.confirmationNumber = confirmationNumber;
+  const travelerNames = args.travelerNames ?? args.traveler_names;
+  if (travelerNames && travelerNames.length > 0) {
+    block.travelerNames = travelerNames;
+  }
+  return block as unknown as FlightBlock;
+}
+
 const TRANSIT_SECTION_META: Record<
-  "transit" | "rentalCars",
+  "flights" | "transit" | "rentalCars",
   { heading: string; placeMarkerIcon: string; placeMarkerColor: string }
 > = {
+  flights: { heading: "Flights", placeMarkerIcon: "plane", placeMarkerColor: "#4a90e2" },
   transit: { heading: "Transit", placeMarkerIcon: "subway", placeMarkerColor: "#17b978" },
   rentalCars: { heading: "Rental cars", placeMarkerIcon: "car", placeMarkerColor: "#38a4a6" },
 };
@@ -532,7 +604,7 @@ const TRANSIT_SECTION_META: Record<
  */
 export function sectionInsertOp(
   trip: TripPlan,
-  sectionType: "transit" | "rentalCars",
+  sectionType: "flights" | "transit" | "rentalCars",
   block: Block,
 ): Json0Op {
   const sections = trip.itinerary.sections;
@@ -618,6 +690,46 @@ export async function resolveEndpointPlace(
     );
   }
   return ctx.rest.getPlaceDetails(predictions[0]!.place_id);
+}
+
+/** Build an airport endpoint from query, resolved place, date, and time. */
+export function buildAirportEndpoint(
+  query: string,
+  place: PlaceData,
+  date: string,
+  time: string,
+): AirportEndpoint {
+  let iata: string | undefined;
+  let name = place.name;
+
+  const queryTrimmed = query.trim();
+  if (/^[A-Za-z]{3}$/.test(queryTrimmed)) {
+    iata = queryTrimmed.toUpperCase();
+  }
+
+  const parenMatch = /\(([A-Za-z]{3})\)/.exec(place.name);
+  if (parenMatch) {
+    iata = iata ?? parenMatch[1]!.toUpperCase();
+    name = place.name.replace(/\s*\([A-Za-z]{3}\)/, "").trim();
+  }
+
+  const queryParenMatch = /\(([A-Za-z]{3})\)/.exec(queryTrimmed);
+  if (queryParenMatch && !iata) {
+    iata = queryParenMatch[1]!.toUpperCase();
+  }
+
+  const airport: { name?: string; iata?: string; cityName?: string } = {
+    name,
+  };
+  if (iata) {
+    airport.iata = iata;
+  }
+
+  return {
+    date,
+    time,
+    airport,
+  };
 }
 
 /** Build a checklist block with pre-populated items. */
