@@ -101,10 +101,13 @@ export async function annotatePlace(
         ? resolved.match.block.place.name
         : `block #${blockId}`;
 
-      if (args.note) {
+      if (args.note !== undefined) {
         const current = findBlockById(entry.snapshot, blockId);
         if (!current) throw new WanderlogError("Place moved or was removed", "stale_target");
         assertBlockAtPath(entry.snapshot, current.sectionIndex, current.blockIndex, blockId);
+        const targetBlock = entry.snapshot.itinerary.sections[current.sectionIndex]!.blocks[current.blockIndex]!;
+        const existingDelta = (targetBlock as { text?: unknown }).text ?? { ops: [{ insert: "\n" }] };
+        const newDelta = { ops: [{ insert: `${args.note}\n` }] };
         const textOps: Json0Op[] = [
           {
             p: [
@@ -115,8 +118,8 @@ export async function annotatePlace(
               current.blockIndex,
               "text",
             ],
-            t: "rich-text",
-            o: [{ insert: `${args.note}\n` }],
+            od: existingDelta,
+            oi: newDelta,
           },
         ];
         await submit(textOps);
