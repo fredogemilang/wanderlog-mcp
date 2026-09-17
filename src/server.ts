@@ -182,6 +182,23 @@ import {
   addFlightDescription,
   addFlightInputSchema,
 } from "./tools/add-flight.js";
+import { deleteTrip, deleteTripDescription, deleteTripInputSchema } from "./tools/delete-trip.js";
+import {
+  getPlaceDetails,
+  getPlaceDetailsDescription,
+  getPlaceDetailsInputSchema,
+} from "./tools/get-place-details.js";
+import { updateTrip, updateTripDescription, updateTripInputSchema } from "./tools/update-trip.js";
+import {
+  editChecklist,
+  editChecklistDescription,
+  editChecklistInputSchema,
+} from "./tools/edit-checklist.js";
+import {
+  editReservation,
+  editReservationDescription,
+  editReservationInputSchema,
+} from "./tools/edit-reservation.js";
 
 const AUTH_ERROR_RESPONSE = {
   content: [
@@ -268,6 +285,14 @@ of places. A complete itinerary uses these building blocks:
      metadata; wanderlog_reorder_places changes its position within one container.
      wanderlog_reorder_sections changes the relative order of custom lists. Never guess when
      a place or section reference is ambiguous — refine the reference first.
+  10. Editing what's already there: wanderlog_edit_checklist ticks/unticks/adds/removes
+     checklist items; wanderlog_edit_reservation changes confirmation numbers, travelers,
+     dates/times, carrier, or notes on flights, transit, rental cars, and hotel stays;
+     wanderlog_update_trip renames a trip or changes its privacy. Prefer these over
+     remove-and-re-add so the user's existing data is preserved.
+  11. wanderlog_get_place_details answers "is it open on Monday?", phone/website, and rating
+     questions for any place. wanderlog_delete_trip is irreversible — only call it after the
+     user explicitly confirms, and pass the exact trip title.
 
 Example add_place call with all features:
   wanderlog_add_place(trip_key, place: "Sensō-ji", day: "day 1",
@@ -548,6 +573,91 @@ export function buildServer(ctx: AppContext): McpServer {
     },
     requireAuth(ctx, async (args) =>
       renameDay(ctx, args as Parameters<typeof renameDay>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_update_trip",
+    {
+      title: "Rename a trip or change its privacy",
+      description: updateTripDescription,
+      inputSchema: updateTripInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      updateTrip(ctx, args as Parameters<typeof updateTrip>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_delete_trip",
+    {
+      title: "Permanently delete a Wanderlog trip",
+      description: deleteTripDescription,
+      inputSchema: deleteTripInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      deleteTrip(ctx, args as Parameters<typeof deleteTrip>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_get_place_details",
+    {
+      title: "Look up details for a place (hours, rating, contact)",
+      description: getPlaceDetailsDescription,
+      inputSchema: getPlaceDetailsInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      getPlaceDetails(ctx, args as Parameters<typeof getPlaceDetails>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_edit_checklist",
+    {
+      title: "Tick, add, remove, or rename checklist items",
+      description: editChecklistDescription,
+      inputSchema: editChecklistInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      editChecklist(ctx, args as Parameters<typeof editChecklist>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_edit_reservation",
+    {
+      title: "Edit a flight, transit, rental car, or hotel reservation",
+      description: editReservationDescription,
+      inputSchema: editReservationInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      editReservation(ctx, args as Parameters<typeof editReservation>[1])),
   );
 
   server.registerTool(

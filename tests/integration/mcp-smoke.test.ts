@@ -87,7 +87,7 @@ describe("MCP stdio server (smoke)", () => {
     expect(p.pid).toBeDefined();
   });
 
-  it("responds to tools/list with all 35 tools", async () => {
+  it("responds to tools/list with all 42 tools", async () => {
     const p = startServer();
     await waitForReady(p);
     await initialize(p);
@@ -103,6 +103,7 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_add_car_rental",
       "wanderlog_add_checklist",
       "wanderlog_add_expense",
+      "wanderlog_add_flight",
       "wanderlog_add_hotel",
       "wanderlog_add_journal",
       "wanderlog_add_note",
@@ -112,10 +113,14 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_annotate_place",
       "wanderlog_create_trip",
       "wanderlog_delete_section",
+      "wanderlog_delete_trip",
+      "wanderlog_edit_checklist",
       "wanderlog_edit_expense",
       "wanderlog_edit_journal",
       "wanderlog_edit_note",
+      "wanderlog_edit_reservation",
       "wanderlog_get_guide",
+      "wanderlog_get_place_details",
       "wanderlog_get_trip",
       "wanderlog_get_trip_forwarding_email",
       "wanderlog_get_trip_url",
@@ -128,13 +133,14 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_remove_journal",
       "wanderlog_remove_note",
       "wanderlog_remove_place",
+      "wanderlog_rename_day",
       "wanderlog_reorder_places",
       "wanderlog_reorder_sections",
-      "wanderlog_rename_day",
       "wanderlog_search_guides",
       "wanderlog_search_hotels",
       "wanderlog_search_places",
       "wanderlog_update_section",
+      "wanderlog_update_trip",
       "wanderlog_update_trip_dates",
     ]);
   });
