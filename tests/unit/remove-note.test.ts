@@ -221,6 +221,31 @@ describe("findNoteMatches", () => {
     const result = findNoteMatches(trip, "Park Güell");
     expect(result).toHaveLength(0);
   });
+
+  it("finds notes in textOnly Notes section when day is 'notes' or 'note'", () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Pick up pocket WiFi\nBuy Tokyo metro pass\n" }],
+    };
+    const onNotes = findNoteMatches(trip, "wifi", "notes");
+    expect(onNotes).toHaveLength(1);
+    expect(onNotes[0]!.plainText).toBe("Pick up pocket WiFi");
+    expect(onNotes[0]!.sectionIndex).toBe(0);
+
+    const onNote = findNoteMatches(trip, "metro", "note");
+    expect(onNote).toHaveLength(1);
+    expect(onNote[0]!.plainText).toBe("Buy Tokyo metro pass");
+  });
+
+  it("finds notes in textOnly Notes section across entire trip without day filter", () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Passport renewal\n" }],
+    };
+    const result = findNoteMatches(trip, "passport");
+    expect(result).toHaveLength(1);
+    expect(result[0]!.plainText).toBe("Passport renewal");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -289,6 +314,78 @@ describe("removeNote", () => {
       trip_key: "checklisttripkey",
       text: "sunscreen",
       day: "day 2",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain("not found");
+    expect(submittedOps).toHaveLength(0);
+  });
+
+  it("removes a note from the textOnly Notes section via day: 'notes'", async () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Passport renewal\nPack charger\n" }],
+    };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await removeNote(ctx, {
+      trip_key: "checklisttripkey",
+      text: "Passport renewal",
+      day: "notes",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain("Removed note");
+    expect(result.content[0]!.text).toContain("Passport renewal");
+    expect(submittedOps).toHaveLength(1);
+    const op = submittedOps[0]![0] as { p: unknown[]; t: string; o: Array<{ delete?: number; retain?: number }> };
+    expect(op.p).toEqual(["itinerary", "sections", 0, "text"]);
+    expect(op.t).toBe("rich-text");
+    expect(op.o.some((d) => "delete" in d)).toBe(true);
+  });
+
+  it("removes note from Notes section without day filter", async () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Unique note in notes section\n" }],
+    };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await removeNote(ctx, {
+      trip_key: "checklisttripkey",
+      text: "Unique note",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain("Removed note");
+    expect(submittedOps).toHaveLength(1);
+    const op = submittedOps[0]![0] as { p: unknown[] };
+    expect(op.p).toEqual(["itinerary", "sections", 0, "text"]);
+  });
+
+  it("returns ambiguous list when multiple notes match in Notes section", async () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Book museum tickets\nBook flight tickets\n" }],
+    };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await removeNote(ctx, {
+      trip_key: "checklisttripkey",
+      text: "Book",
+      day: "notes",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain("matches 2 notes");
+    expect(result.content[0]!.text).toContain("Book museum");
+    expect(result.content[0]!.text).toContain("Book flight");
+    expect(submittedOps).toHaveLength(0);
+  });
+
+  it("returns not found when no notes match in Notes section with day: 'notes'", async () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Something else\n" }],
+    };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await removeNote(ctx, {
+      trip_key: "checklisttripkey",
+      text: "sunscreen",
+      day: "notes",
     });
     expect(result.isError).toBe(true);
     expect(result.content[0]!.text).toContain("not found");

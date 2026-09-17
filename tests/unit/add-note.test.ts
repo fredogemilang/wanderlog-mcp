@@ -89,12 +89,11 @@ describe("addNote section targeting", () => {
       "itinerary",
       "sections",
       0,
-      "blocks",
-      0,
+      "text",
     ]);
   });
 
-  it("adds a note to a named undated section case-insensitively", async () => {
+  it("adds a note to the textOnly Notes section case-insensitively via rich-text op", async () => {
     const { ctx, submittedOps } = makeFakeContext(checklistTrip);
     const result = await addNote(ctx, {
       trip_key: "T",
@@ -104,19 +103,83 @@ describe("addNote section targeting", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0]!.text).toContain('section "Notes"');
+    expect(submittedOps).toHaveLength(1);
+    expect(submittedOps[0]![0]!).toMatchObject({
+      p: ["itinerary", "sections", 0, "text"],
+      t: "rich-text",
+      o: [{ insert: "Keep passport copies here\n" }],
+    });
+  });
+
+  it("adds a note block to a custom normal section", async () => {
+    const trip = structuredClone(checklistTrip);
+    trip.itinerary.sections.push({
+      id: 999,
+      type: "normal",
+      mode: "placeList",
+      heading: "Trip Preparations",
+      date: null,
+      blocks: [],
+    });
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await addNote(ctx, {
+      trip_key: "T",
+      text: "Buy travel insurance",
+      section: "Trip Preparations",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain('section "Trip Preparations"');
     expect(submittedOps).toHaveLength(2);
     expect(submittedOps[0]![0]!.p).toEqual([
       "itinerary",
       "sections",
-      0,
+      trip.itinerary.sections.length - 1,
       "blocks",
       0,
     ]);
     expect((submittedOps[0]![0] as { li: { type: string } }).li.type).toBe("note");
     expect(submittedOps[1]![0]).toMatchObject({
-      p: ["itinerary", "sections", 0, "blocks", 0, "text"],
+      p: ["itinerary", "sections", trip.itinerary.sections.length - 1, "blocks", 0, "text"],
       t: "rich-text",
-      o: [{ insert: "Keep passport copies here\n" }],
+      o: [{ insert: "Buy travel insurance\n" }],
+    });
+  });
+
+  it("adds a note to the textOnly Notes section via day: 'notes'", async () => {
+    const { ctx, submittedOps } = makeFakeContext(checklistTrip);
+    const result = await addNote(ctx, {
+      trip_key: "T",
+      text: "Packing reminder",
+      day: "notes",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain('section "Notes"');
+    expect(submittedOps).toHaveLength(1);
+    expect(submittedOps[0]![0]!).toMatchObject({
+      p: ["itinerary", "sections", 0, "text"],
+      t: "rich-text",
+      o: [{ insert: "Packing reminder\n" }],
+    });
+  });
+
+  it("appends to existing text in the textOnly Notes section", async () => {
+    const trip = structuredClone(checklistTrip);
+    trip.itinerary.sections[0]!.text = { ops: [{ insert: "First note\n" }] };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await addNote(ctx, {
+      trip_key: "T",
+      text: "Second note",
+      day: "notes",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(submittedOps).toHaveLength(1);
+    expect(submittedOps[0]![0]!).toMatchObject({
+      p: ["itinerary", "sections", 0, "text"],
+      t: "rich-text",
+      o: [{ retain: "First note\n".length }, { insert: "Second note\n" }],
     });
   });
 
@@ -168,8 +231,7 @@ describe("addNote section targeting", () => {
       "itinerary",
       "sections",
       0,
-      "blocks",
-      0,
+      "text",
     ]);
   });
 

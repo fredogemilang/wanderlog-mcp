@@ -4,10 +4,10 @@ import { formatBlockLine } from "../../src/formatters/trip-summary.ts";
 import {
   buildNoteBlock,
   buildChecklistBlock,
+  findNotesSection,
   findTargetSection,
 } from "../../src/tools/shared.ts";
 import type {
-  Block,
   ChecklistBlock,
   NoteBlock,
   TripPlan,
@@ -76,8 +76,25 @@ describe("buildChecklistBlock", () => {
 });
 
 // ---------------------------------------------------------------------------
-// findTargetSection tests
+// findNotesSection & findTargetSection tests
 // ---------------------------------------------------------------------------
+
+describe("findNotesSection", () => {
+  it("returns the top-level textOnly Notes section", () => {
+    const trip = fresh(checklistTrip);
+    const result = findNotesSection(trip);
+    expect(result).not.toBeNull();
+    expect(result!.section.type).toBe("textOnly");
+    expect(result!.section.heading).toBe("Notes");
+    expect(result!.index).toBe(0);
+  });
+
+  it("returns null when trip has no textOnly section", () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections = trip.itinerary.sections.filter((s) => s.type !== "textOnly");
+    expect(findNotesSection(trip)).toBeNull();
+  });
+});
 
 describe("findTargetSection", () => {
   it("returns the Places to visit section when no day given", () => {
@@ -92,6 +109,29 @@ describe("findTargetSection", () => {
     const target = findTargetSection(trip, "day 1");
     expect(target.label).toBe("day 2026-06-01");
     expect(target.section.date).toBe("2026-06-01");
+  });
+
+  it("resolves 'notes' case-insensitively to the Notes section", () => {
+    const trip = fresh(checklistTrip);
+    const target = findTargetSection(trip, "notes");
+    expect(target.section.type).toBe("textOnly");
+    expect(target.label).toBe('section "Notes"');
+
+    const targetUpper = findTargetSection(trip, "NOTES");
+    expect(targetUpper.section.type).toBe("textOnly");
+  });
+
+  it("resolves 'note' to the Notes section", () => {
+    const trip = fresh(checklistTrip);
+    const target = findTargetSection(trip, "note");
+    expect(target.section.type).toBe("textOnly");
+    expect(target.label).toBe('section "Notes"');
+  });
+
+  it("throws when targeting 'notes' but trip has no Notes section", () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections = trip.itinerary.sections.filter((s) => s.type !== "textOnly");
+    expect(() => findTargetSection(trip, "notes")).toThrow("Trip has no 'Notes' section");
   });
 
   it("resolves ISO date", () => {

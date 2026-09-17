@@ -82,6 +82,21 @@ describe("findEditTargets — note blocks", () => {
     expect(target.fieldPath).toContain("blocks");
   });
 
+  it("finds notes in textOnly Notes section when day is 'notes' or 'note'", () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Pick up pocket WiFi\n" }],
+    };
+    const results = findEditTargets(trip, "wifi", "notes");
+    expect(results).toHaveLength(1);
+    expect(results[0]!.kind).toBe("rich-text");
+    expect(results[0]!.fieldPath).toEqual(["itinerary", "sections", 0, "text"]);
+    expect(results[0]!.preview).toContain("Pick up pocket WiFi");
+
+    const onNote = findEditTargets(trip, "wifi", "note");
+    expect(onNote).toHaveLength(1);
+  });
+
   it("records correct offset for note match", () => {
     const trip = fresh(mixedBlocksTrip);
     const results = findEditTargets(trip, "Check out the");
@@ -354,6 +369,44 @@ describe("editNote", () => {
     // Should have a retain for "Please " prefix
     expect(deltaOps[0]).toMatchObject({ retain: "Please ".length });
     expect(deltaOps.some((d) => d.insert === "reserve")).toBe(true);
+  });
+
+  it("edits a note in the textOnly Notes section via rich-text op", async () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Remember passport copies\n" }],
+    };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await editNote(ctx, {
+      trip_key: "checklisttripkey",
+      old_text: "passport copies",
+      new_text: "physical and digital passport copies",
+      day: "notes",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain('section "Notes"');
+    expect(submittedOps).toHaveLength(1);
+    const op = submittedOps[0]![0] as { p: unknown[]; t: string; o: unknown[] };
+    expect(op.p).toEqual(["itinerary", "sections", 0, "text"]);
+    expect(op.t).toBe("rich-text");
+  });
+
+  it("finds and edits a note in Notes section without day filter", async () => {
+    const trip = fresh(checklistTrip);
+    trip.itinerary.sections[0]!.text = {
+      ops: [{ insert: "Bring power adapter\n" }],
+    };
+    const { ctx, submittedOps } = makeFakeContext(trip);
+    const result = await editNote(ctx, {
+      trip_key: "checklisttripkey",
+      old_text: "power adapter",
+      new_text: "Type C power adapter",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain('section "Notes"');
+    expect(submittedOps).toHaveLength(1);
+    const op = submittedOps[0]![0] as { p: unknown[]; t: string };
+    expect(op.p).toEqual(["itinerary", "sections", 0, "text"]);
   });
 });
 

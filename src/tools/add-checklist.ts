@@ -26,7 +26,7 @@ export const addChecklistInputSchema = {
     .string()
     .optional()
     .describe(
-      "Optional day to add the checklist to. Accepts 'day 2', 'May 4', or ISO '2026-05-04'. If 'section' is also provided, the section takes precedence. Omit both to add to the 'Places to visit' list.",
+      "Optional day to add the checklist to. Accepts 'day 2', 'May 4', ISO '2026-05-04', or 'notes' to target the trip-level Notes section. If 'section' is also provided, the section takes precedence. Omit both to add to the 'Places to visit' list.",
     ),
   section: z
     .string()
@@ -46,9 +46,9 @@ Add at least one checklist per trip. Common patterns:
 - On day 1: an arrival-day checklist ("pick up Oyster card", "check into hotel", "buy SIM")
 - On specific days: day-of tasks ("bring swimsuit", "charge camera", "carry cash for market")
 
-Supply "day" for a dated itinerary day or "section" for an undated section such as "Notes"
-or "Trip Preparations". When both are provided, "section" takes precedence. Omit both to add
-to the default "Places to visit" list.
+Supply "day" for a dated itinerary day (or "notes" for the trip-level Notes section), or "section"
+for an undated section such as "Notes" or "Trip Preparations". When both are provided, "section"
+takes precedence. Omit both to add to the default "Places to visit" list.
 
 Returns a confirmation including the checklist title and item count.
 `.trim();

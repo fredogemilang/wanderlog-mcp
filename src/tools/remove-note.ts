@@ -4,7 +4,7 @@ import { WanderlogError, WanderlogNotFoundError } from "../errors.js";
 import type { Json0Op } from "../ot/apply.js";
 import { resolveDay } from "../resolvers/day.js";
 import type { NoteBlock, QuillDelta, TripPlan } from "../types.js";
-import { findDaySectionByDate, submitOp } from "./shared.js";
+import { findDaySectionByDate, findNotesSection, submitOp } from "./shared.js";
 
 export const removeNoteInputSchema = {
   trip_key: z.string().min(1).describe("The trip to remove from."),
@@ -16,18 +16,19 @@ export const removeNoteInputSchema = {
     .string()
     .optional()
     .describe(
-      "Optional day to search. Accepts 'day 2', 'May 4', or ISO '2026-05-04'. Omit to search the entire trip.",
+      "Optional day to search. Accepts 'day 2', 'May 4', ISO '2026-05-04', or 'notes' to target the trip-level Notes section. Omit to search the entire trip.",
     ),
 };
 
 export const removeNoteDescription = `
-Removes a note block from a Wanderlog trip by matching a substring of its text content.
+Removes a note from a Wanderlog trip by matching a substring of its text content.
 
+Searches across note blocks and the trip-level Notes section.
 The match is case-insensitive. If exactly one note matches, it is deleted. If no notes match,
 an error is returned. If multiple notes match, a list of previews is returned — supply a more
 specific substring to narrow to one.
 
-Use the optional 'day' filter to limit the search to a specific day.
+Use the optional 'day' filter to limit the search to a specific day (e.g. 'day 2', 'May 4', or 'notes' for the trip-level Notes section).
 `.trim();
 
 type Args = {
@@ -38,9 +39,11 @@ type Args = {
 
 export type NoteMatch = {
   sectionIndex: number;
-  blockIndex: number;
+  blockIndex?: number;
   plainText: string;
-  block: NoteBlock;
+  block?: NoteBlock;
+  offset?: number;
+  deleteLength?: number;
 };
 
 export function extractDeltaText(delta: QuillDelta | undefined): string {
@@ -52,6 +55,51 @@ export function extractPlainText(block: NoteBlock): string {
   return extractDeltaText(block.text);
 }
 
+export function findTextOnlyNoteMatches(
+  fullText: string,
+  query: string,
+  sectionIndex: number,
+): NoteMatch[] {
+  const lowerQuery = query.toLowerCase();
+  const lowerFull = fullText.toLowerCase();
+
+  const lines = fullText.split("\n");
+  const notes: NoteMatch[] = [];
+  let offset = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const rawLen = line.length + (i < lines.length - 1 || fullText.endsWith("\n") ? 1 : 0);
+    const trimmed = line.trim();
+    if (trimmed.length > 0) {
+      if (trimmed.toLowerCase().includes(lowerQuery)) {
+        notes.push({
+          sectionIndex,
+          plainText: trimmed,
+          offset,
+          deleteLength: rawLen,
+        });
+      }
+    }
+    offset += rawLen;
+  }
+
+  if (notes.length === 0 && lowerFull.includes(lowerQuery)) {
+    const matchStart = lowerFull.indexOf(lowerQuery);
+    const matchLen = query.length;
+    const hasTrailingNewline = fullText[matchStart + matchLen] === "\n";
+    const deleteLen = matchLen + (hasTrailingNewline ? 1 : 0);
+    notes.push({
+      sectionIndex,
+      plainText: fullText.slice(matchStart, matchStart + matchLen),
+      offset: matchStart,
+      deleteLength: deleteLen,
+    });
+  }
+
+  return notes;
+}
+
 export function findNoteMatches(trip: TripPlan, query: string, day?: string): NoteMatch[] {
   const lowerQuery = query.toLowerCase();
   const sections = trip.itinerary.sections;
@@ -59,16 +107,30 @@ export function findNoteMatches(trip: TripPlan, query: string, day?: string): No
 
   let sectionIndices: number[];
   if (day) {
-    const resolved = resolveDay(trip, day);
-    const found = findDaySectionByDate(trip, resolved.date!);
-    if (!found) return [];
-    sectionIndices = [found.index];
+    const normalized = day.trim().toLowerCase();
+    if (normalized === "notes" || normalized === "note") {
+      const notesSection = findNotesSection(trip);
+      if (!notesSection) return [];
+      sectionIndices = [notesSection.index];
+    } else {
+      const resolved = resolveDay(trip, day);
+      const found = findDaySectionByDate(trip, resolved.date!);
+      if (!found) return [];
+      sectionIndices = [found.index];
+    }
   } else {
     sectionIndices = Array.from({ length: sections.length }, (_, i) => i);
   }
 
   for (const sectionIndex of sectionIndices) {
     const section = sections[sectionIndex]!;
+    if (section.type === "textOnly") {
+      const fullText = extractDeltaText(section.text);
+      if (fullText) {
+        const textMatches = findTextOnlyNoteMatches(fullText, query, sectionIndex);
+        matches.push(...textMatches);
+      }
+    }
     for (let blockIndex = 0; blockIndex < section.blocks.length; blockIndex++) {
       const block = section.blocks[blockIndex]!;
       if (block.type !== "note") continue;
@@ -117,17 +179,35 @@ export async function removeNote(
           },
         };
       }
-      const { sectionIndex, blockIndex, block, plainText } = matches[0]!;
-      const blockId = block.id;
-      const ops: Json0Op[] = [
-        { p: ["itinerary", "sections", sectionIndex, "blocks", blockIndex], ld: block },
-      ];
-      await submit(ops);
-      const remains = entry.snapshot.itinerary.sections.some((section) =>
-        section.blocks.some((candidate) => candidate.id === blockId),
-      );
-      if (remains) throw new WanderlogError("Removed note is still present", "stale_target");
-      return { plainText, tripTitle: trip.title };
+      const match = matches[0]!;
+      if (match.block && match.blockIndex !== undefined && match.blockIndex >= 0) {
+        const { sectionIndex, blockIndex, block, plainText } = match;
+        const blockId = block.id;
+        const ops: Json0Op[] = [
+          { p: ["itinerary", "sections", sectionIndex, "blocks", blockIndex], ld: block },
+        ];
+        await submit(ops);
+        const remains = entry.snapshot.itinerary.sections.some((section) =>
+          section.blocks.some((candidate) => candidate.id === blockId),
+        );
+        if (remains) throw new WanderlogError("Removed note is still present", "stale_target");
+        return { plainText, tripTitle: trip.title };
+      } else {
+        const deltaOps: Array<Record<string, unknown>> = [];
+        if (match.offset && match.offset > 0) {
+          deltaOps.push({ retain: match.offset });
+        }
+        deltaOps.push({ delete: match.deleteLength ?? match.plainText.length });
+        const ops: Json0Op[] = [
+          {
+            p: ["itinerary", "sections", match.sectionIndex, "text"],
+            t: "rich-text",
+            o: deltaOps,
+          },
+        ];
+        await submit(ops);
+        return { plainText: match.plainText, tripTitle: trip.title };
+      }
     });
     if ("response" in result && result.response) return result.response;
     const text = `Removed note "${notePreview(result.plainText)}" from "${result.tripTitle}".`;

@@ -5,7 +5,7 @@ import type { Json0Op } from "../ot/apply.js";
 import { resolveDay } from "../resolvers/day.js";
 import type { ChecklistBlock, NoteBlock, QuillDelta, TripPlan } from "../types.js";
 import { isChecklistBlock, isPlaceBlock } from "../types.js";
-import { findDaySectionByDate, submitOp } from "./shared.js";
+import { findDaySectionByDate, findNotesSection, submitOp } from "./shared.js";
 import { extractDeltaText } from "./remove-note.js";
 
 export const editNoteInputSchema = {
@@ -19,19 +19,19 @@ export const editNoteInputSchema = {
     .string()
     .optional()
     .describe(
-      "Optional day to search. Accepts 'day 2', 'May 4', or ISO '2026-05-04'. Omit to search the entire trip.",
+      "Optional day to search. Accepts 'day 2', 'May 4', ISO '2026-05-04', or 'notes' to target the trip-level Notes section. Omit to search the entire trip.",
     ),
 };
 
 export const editNoteDescription = `
 Edits note content in a Wanderlog trip by finding and replacing a substring.
 
-Searches across freestanding notes, place annotations, and checklist titles and items.
+Searches across freestanding notes, place annotations, checklist titles and items, and the trip-level Notes section.
 The match is case-insensitive. If exactly one match is found, the replacement is made in place.
 If no matches are found, an error is returned. If multiple matches are found, a numbered list
 of previews is returned — call again with a more specific substring.
 
-Use the optional 'day' filter to limit the search to a specific day.
+Use the optional 'day' filter to limit the search to a specific day (e.g. 'day 2', 'May 4', or 'notes' for the trip-level Notes section).
 `.trim();
 
 type Args = {
@@ -99,16 +99,42 @@ export function findEditTargets(trip: TripPlan, query: string, day?: string): Ed
 
   let sectionIndices: number[];
   if (day) {
-    const resolved = resolveDay(trip, day);
-    const found = findDaySectionByDate(trip, resolved.date!);
-    if (!found) return [];
-    sectionIndices = [found.index];
+    const normalized = day.trim().toLowerCase();
+    if (normalized === "notes" || normalized === "note") {
+      const notesSection = findNotesSection(trip);
+      if (!notesSection) return [];
+      sectionIndices = [notesSection.index];
+    } else {
+      const resolved = resolveDay(trip, day);
+      const found = findDaySectionByDate(trip, resolved.date!);
+      if (!found) return [];
+      sectionIndices = [found.index];
+    }
   } else {
     sectionIndices = Array.from({ length: sections.length }, (_, i) => i);
   }
 
   for (const si of sectionIndices) {
     const section = sections[si]!;
+    if (section.type === "textOnly") {
+      const delta = section.text;
+      if (delta) {
+        const m = matchInDelta(delta, query);
+        if (m) {
+          targets.push({
+            kind: "rich-text",
+            label: `section "${section.heading || "Notes"}"`,
+            preview: `Note: "${previewText(extractDeltaText(delta))}"`,
+            sectionIndex: si,
+            blockIndex: -1,
+            fieldPath: ["itinerary", "sections", si, "text"],
+            offset: m.offset,
+            matchedLen: m.matchedLen,
+            crossesBoundary: m.crossesBoundary,
+          });
+        }
+      }
+    }
     for (let bi = 0; bi < section.blocks.length; bi++) {
       const block = section.blocks[bi]!;
       const blockBase: (string | number)[] = ["itinerary", "sections", si, "blocks", bi];

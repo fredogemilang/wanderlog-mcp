@@ -335,4 +335,18 @@ describe("addChecklist section targeting", () => {
       3,
     ]);
   });
+
+  it("targets the Notes section via day: 'notes'", async () => {
+    const { result, submittedOps } = await runChecklist({ day: "notes" });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]!.text).toContain('section "Notes"');
+    expect(submittedOps[0]![0]!.p).toEqual([
+      "itinerary",
+      "sections",
+      0,
+      "blocks",
+      0,
+    ]);
+  });
 });

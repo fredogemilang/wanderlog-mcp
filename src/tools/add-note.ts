@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AppContext } from "../context.js";
 import { WanderlogError } from "../errors.js";
 import type { Json0Op } from "../ot/apply.js";
+import { extractDeltaText } from "./remove-note.js";
 import {
   buildNoteBlock,
   findBlockById,
@@ -27,7 +28,7 @@ export const addNoteInputSchema = z
       .min(1)
       .optional()
       .describe(
-        "Optional day to add the note to. Accepts 'day 2', 'May 4', or ISO '2026-05-04'. If 'section' is also provided, the section takes precedence. Omit both to add to the 'Places to visit' list.",
+        "Optional day to add the note to. Accepts 'day 2', 'May 4', ISO '2026-05-04', or 'notes' to target the trip-level Notes section. If 'section' is also provided, the section takes precedence. Omit both to add to the 'Places to visit' list.",
       ),
     section: z
       .string()
@@ -41,9 +42,9 @@ export const addNoteInputSchema = z
 export const addNoteDescription = `
 Adds a text note to a Wanderlog trip. Notes appear inline between places in a day, acting as
 the connective tissue of the itinerary. Every well-built day should have notes between stops.
-Supply "day" for a dated itinerary day or "section" for an undated section such as "Notes"
-or "Food & Drink". When both are provided, "section" takes precedence. Omit both to add to
-the default "Places to visit" list.
+Supply "day" for a dated itinerary day (or "notes" for the trip-level Notes section), or "section"
+for an undated section such as "Notes" or "Food & Drink". When both are provided, "section" takes
+precedence. Omit both to add to the default "Places to visit" list.
 
 When to add a note (do this after adding each place or group of places):
 - How to get there: "Walk 15 min along the South Bank, or take the Jubilee line one stop"
@@ -66,6 +67,41 @@ export async function addNote(
     const result = await submitOp(ctx, args.trip_key, async (entry, submit) => {
       const trip = entry.snapshot;
       const target = findBlockTargetSection(trip, args, "note");
+
+      if (target.section.type === "textOnly") {
+        const existingDelta = target.section.text;
+        const existingText = extractDeltaText(existingDelta);
+        const existingLength = existingText.length;
+
+        let deltaOps: Array<Record<string, unknown>>;
+        if (existingLength === 0) {
+          deltaOps = [{ insert: `${args.text}\n` }];
+        } else if (!existingText.trim()) {
+          deltaOps = [{ delete: existingLength }, { insert: `${args.text}\n` }];
+        } else {
+          const prefix = existingText.endsWith("\n") ? "" : "\n";
+          deltaOps = [
+            { retain: existingLength },
+            { insert: `${prefix}${args.text}\n` },
+          ];
+        }
+
+        const textOps: Json0Op[] = [
+          {
+            p: [
+              "itinerary",
+              "sections",
+              target.index,
+              "text",
+            ],
+            t: "rich-text",
+            o: deltaOps,
+          },
+        ];
+        await submit(textOps);
+        return { targetLabel: target.label, tripTitle: entry.snapshot.title };
+      }
+
       const block = buildNoteBlock(userId);
       const insertOps: Json0Op[] = [
         {

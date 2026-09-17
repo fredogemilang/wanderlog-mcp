@@ -171,6 +171,10 @@ export function findSectionByRef(
   if (normalized === "places to visit" || normalized === "places") {
     return findPlacesToVisitSection(trip);
   }
+  if (normalized === "notes" || normalized === "note") {
+    const notes = findNotesSection(trip);
+    if (notes) return notes;
+  }
   for (let i = 0; i < trip.itinerary.sections.length; i++) {
     const s = trip.itinerary.sections[i]!;
     if (s.heading.trim().toLowerCase() === normalized) {
@@ -288,6 +292,32 @@ export function findPlacesToVisitSection(trip: TripPlan): {
   return null;
 }
 
+/**
+ * Finds the top-level "Notes" section (textOnly section).
+ * Returns its index in trip.itinerary.sections and the Section object.
+ */
+export function findNotesSection(trip: TripPlan): {
+  index: number;
+  section: Section;
+} | null {
+  for (let i = 0; i < trip.itinerary.sections.length; i++) {
+    const s = trip.itinerary.sections[i]!;
+    if (
+      s.type === "textOnly" &&
+      (s.heading?.trim().toLowerCase() === "notes" || !s.heading)
+    ) {
+      return { index: i, section: s };
+    }
+  }
+  for (let i = 0; i < trip.itinerary.sections.length; i++) {
+    const s = trip.itinerary.sections[i]!;
+    if (s.type === "textOnly") {
+      return { index: i, section: s };
+    }
+  }
+  return null;
+}
+
 /** Finds the first hotels-type section in the trip. */
 export function findHotelsSection(trip: TripPlan): {
   index: number;
@@ -354,6 +384,22 @@ export function findTargetSection(
   day?: string,
 ): TargetSection {
   if (day) {
+    const normalized = day.trim().toLowerCase();
+    if (normalized === "notes" || normalized === "note") {
+      const notes = findNotesSection(trip);
+      if (!notes) {
+        throw new WanderlogError(
+          "Trip has no 'Notes' section",
+          "no_notes_section",
+          "This is unexpected — Wanderlog usually creates one automatically.",
+        );
+      }
+      return {
+        index: notes.index,
+        section: notes.section,
+        label: `section "${notes.section.heading || "Notes"}"`,
+      };
+    }
     const daySection = resolveDay(trip, day);
     const found = findDaySectionByDate(trip, daySection.date!);
     if (!found) {
