@@ -23,6 +23,7 @@ The agent calls the tools, interleaves places and notes for each day, adds hotel
 - Custom-list lifecycle operations now reject duplicate or ambiguous section headings instead of silently changing the first match.
 - `wanderlog_search_hotels` — search Wanderlog's hotel aggregator across airbnb, expedia, google, and kayak. Returns ranked offers with per-vendor price comparison and faceted filter discovery so the LLM never has to memorise Wanderlog's internal enum values.
 - A failed startup authentication probe now gets one shared retry on the first tool call, allowing valid sessions to recover from a transient network or proxy error without restarting the server.
+- `wanderlog_add_place` accepts an optional `place_id`, so `wanderlog_search_places` (`response_format: "detailed"`) now has somewhere to send its results — pass the id straight through to add the exact candidate when a name matches multiple branches or the wrong city, instead of hoping the top autocomplete match is right.
 
 ## What's New in v0.3.1
 
