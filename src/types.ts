@@ -219,6 +219,15 @@ export type Expense = {
 
 export type Budget = {
   expenses?: Expense[];
+  /** Trip-wide budget target set via "Set budget". */
+  amount?: { amount: number; currencyCode: string };
+  /** "Simplify group expenses" toggle in Expense settings. */
+  simplifyDebt?: boolean;
+  [k: string]: unknown;
+};
+
+export type TripOptions = {
+  defaultTravelMode?: "driving" | "transit" | string;
   [k: string]: unknown;
 };
 
@@ -281,7 +290,7 @@ export type TripPlan = {
   editors?: Contributor[];
   itinerary: {
     sections: Section[];
-    options?: unknown;
+    options?: TripOptions;
     budget?: Budget;
     journal?: Journal;
   };
@@ -537,4 +546,111 @@ export type HotelSearchResult = {
   applied_filters: Record<string, unknown>;
   available_filters: HotelAvailableFilters;
   offers: HotelOffer[];
+};
+
+export type UserSummary = {
+  id: number;
+  username: string;
+  name?: string;
+  profilePictureKey?: string | null;
+};
+
+export type Invitee =
+  | { type: "user"; id: number; username: string; name?: string; profilePictureKey?: string | null }
+  | { type: "email"; email: string };
+
+export type BudgetAmount = { amount: number; currencyCode: string };
+
+export type ExploreCategory = {
+  id: number;
+  name: string;
+  shortName?: string;
+  emoji?: string;
+  mapLayerGroup?: string;
+  geoCategoryName?: string;
+};
+
+export type ExplorePlacesListRef = {
+  id: string;
+  type: string;
+  title: string;
+  placeCount?: number | null;
+  sourceSite?: string | null;
+  author?: { username?: string; name?: string } | null;
+};
+
+export type ExploreSection = {
+  type: string;
+  listId?: string | number;
+  places?: {
+    heading?: string;
+    blocks?: Array<{
+      type: string;
+      place?: { name: string; placeId: string; latitude?: number; longitude?: number };
+    }>;
+  };
+};
+
+export type ExplorePage = {
+  geo: { id: number; name: string; countryName?: string | null; placeDescription?: string | null };
+  categories?: ExploreCategory[];
+  searchedCategories?: Array<{ id: number; name: string; geoCategoryName?: string }>;
+  placesLists?: ExplorePlacesListRef[];
+  sections?: ExploreSection[];
+  nearby?: Geo[];
+};
+
+export type PlacesListSource = {
+  url?: string;
+  snippet?: string;
+  siteName?: string;
+  shortName?: string;
+};
+
+export type PlacesListEntry = {
+  id?: number;
+  name: string;
+  placeId: string;
+  description?: string | null;
+  generatedDescription?: string | null;
+  categories?: string[];
+  minMinutesSpent?: number | null;
+  maxMinutesSpent?: number | null;
+  address?: string | null;
+  rating?: number | null;
+  numRatings?: number | null;
+  tripadvisorRating?: number | null;
+  website?: string | null;
+  priceLevel?: number | null;
+  permanentlyClosed?: boolean;
+  businessStatus?: string | null;
+  sources?: PlacesListSource[];
+};
+
+export type PlacesList = {
+  id: string;
+  type: string;
+  title: string;
+  geo?: { id: number; name: string };
+  placeMetadata?: PlacesListEntry[];
+};
+
+export type RecommendedPlace = {
+  id: number;
+  placeId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  imageKey?: string | null;
+};
+
+export type DistanceLeg = {
+  fromPlaceId: string;
+  toPlaceId: string;
+  travelMode: string;
+  route?: {
+    distance?: { value: number; text: string };
+    duration?: { value: number; text: string };
+    polyline?: string;
+  } | null;
 };

@@ -8,6 +8,7 @@ import {
   formatCandidateList,
   formatExpense,
 } from "./expenses-shared.js";
+import { personLabel, resolvePerson, resolveSplitWith, type SplitWith } from "./budget.js";
 import { submitOp } from "./shared.js";
 
 export const editExpenseInputSchema = {
@@ -65,6 +66,14 @@ export const editExpenseInputSchema = {
     ])
     .optional()
     .describe("New expense category. Omit to leave unchanged."),
+  new_paid_by: z
+    .string()
+    .optional()
+    .describe("Reassign who paid — tripmate name/username, or 'me'."),
+  new_split_with: z
+    .array(z.string())
+    .optional()
+    .describe("Replace who shares the cost: ['everyone'], a list of names/usernames, or ['none']."),
   new_date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD")
@@ -94,6 +103,8 @@ type Args = {
   new_currency?: string;
   new_category?: string;
   new_date?: string;
+  new_paid_by?: string;
+  new_split_with?: string[];
 };
 
 /** od+oi replacement for an existing key; oi-only insert when the key is absent. */
@@ -109,10 +120,25 @@ function buildEditOps(
   expense: Expense,
   index: number,
   args: Args,
+  people?: { payerId?: number; splitWith?: SplitWith; label: (id: number) => string },
 ): { ops: Json0Op[]; changes: string[] } {
   const base = ["itinerary", "budget", "expenses", index];
   const ops: Json0Op[] = [];
   const changes: string[] = [];
+
+  if (people?.payerId !== undefined && people.payerId !== expense.paidByUserId) {
+    ops.push(replaceField([...base, "paidByUserId"], expense.paidByUserId, people.payerId));
+    ops.push(replaceField([...base, "paidByUser"], expense.paidByUser, { type: "registered", id: people.payerId }));
+    changes.push(`paid by → ${people.label(people.payerId)}`);
+  }
+  if (people?.splitWith !== undefined) {
+    const current = JSON.stringify((expense.splitWith as { users?: unknown[] } | undefined)?.users ?? []);
+    if (current !== JSON.stringify(people.splitWith.users)) {
+      ops.push(replaceField([...base, "splitWith"], expense.splitWith, people.splitWith));
+      const names = people.splitWith.users.map((u) => people.label(u.id));
+      changes.push(`split with → ${names.length ? names.join(", ") : "nobody"}`);
+    }
+  }
 
   if (args.new_description !== undefined && args.new_description !== expense.description) {
     ops.push(replaceField([...base, "description"], expense.description, args.new_description));
@@ -168,10 +194,12 @@ export async function editExpense(
       args.new_amount !== undefined ||
       args.new_currency !== undefined ||
       args.new_category !== undefined ||
-      args.new_date !== undefined;
+      args.new_date !== undefined ||
+      args.new_paid_by !== undefined ||
+      args.new_split_with !== undefined;
     if (!hasNewValue) {
       throw new WanderlogValidationError(
-        "Nothing to edit — supply at least one of new_description, new_amount, new_currency, new_category, or new_date.",
+        "Nothing to edit — supply at least one of new_description, new_amount, new_currency, new_category, new_date, new_paid_by, or new_split_with.",
       );
     }
 
@@ -200,7 +228,12 @@ export async function editExpense(
         };
       }
       const { index, expense } = matches[0]!;
-      const { ops, changes } = buildEditOps(expense, index, args);
+      const people = {
+        payerId: args.new_paid_by ? resolvePerson(trip, args.new_paid_by, ctx.userId).id : undefined,
+        splitWith: resolveSplitWith(trip, args.new_split_with, ctx.userId),
+        label: (id: number) => personLabel(trip, id, ctx.userId),
+      };
+      const { ops, changes } = buildEditOps(expense, index, args, people);
       if (ops.length === 0) {
         return {
           response: {

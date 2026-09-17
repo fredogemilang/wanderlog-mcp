@@ -199,6 +199,36 @@ import {
   editReservationDescription,
   editReservationInputSchema,
 } from "./tools/edit-reservation.js";
+import { explore, exploreDescription, exploreInputSchema } from "./tools/explore.js";
+import {
+  getTravelTimes,
+  getTravelTimesDescription,
+  getTravelTimesInputSchema,
+} from "./tools/get-travel-times.js";
+import {
+  inviteCollaborator,
+  inviteCollaboratorDescription,
+  inviteCollaboratorInputSchema,
+  listCollaborators,
+  listCollaboratorsDescription,
+  listCollaboratorsInputSchema,
+  removeCollaborator,
+  removeCollaboratorDescription,
+  removeCollaboratorInputSchema,
+} from "./tools/collaborators.js";
+import {
+  budgetSummary,
+  budgetSummaryDescription,
+  budgetSummaryInputSchema,
+  setBudget,
+  setBudgetDescription,
+  setBudgetInputSchema,
+} from "./tools/budget.js";
+import {
+  addRestaurantReservation,
+  addRestaurantReservationDescription,
+  addRestaurantReservationInputSchema,
+} from "./tools/add-restaurant-reservation.js";
 
 const AUTH_ERROR_RESPONSE = {
   content: [
@@ -293,6 +323,18 @@ of places. A complete itinerary uses these building blocks:
   11. wanderlog_get_place_details answers "is it open on Monday?", phone/website, and rating
      questions for any place. wanderlog_delete_trip is irreversible — only call it after the
      user explicitly confirms, and pass the exact trip title.
+  12. IDEAS: when the user asks what to do/eat/see, call wanderlog_explore first (category:
+     "attractions", "restaurants", "cafes", "temples", … or near: "the hotel") — it returns
+     Wanderlog's curated, ranked lists with ratings and visit durations. Fall back to
+     wanderlog_search_places for free-text lookups.
+  13. ROUTING: wanderlog_get_travel_times gives drive/transit/walk legs between the places in
+     a day, in current order. Use it to spot over-packed days and then reorder/move places.
+  14. GROUP TRIPS: wanderlog_list_collaborators shows tripmates; wanderlog_invite_collaborator
+     emails real people — only after explicit confirmation. For shared costs pass paid_by and
+     split_with to wanderlog_add_expense; wanderlog_budget_summary reports who owes whom, and
+     wanderlog_set_budget sets the target.
+  15. Restaurant bookings the user already holds go in wanderlog_add_restaurant_reservation
+     (date, time, party size, confirmation). It records — it does not book.
 
 Example add_place call with all features:
   wanderlog_add_place(trip_key, place: "Sensō-ji", day: "day 1",
@@ -658,6 +700,142 @@ export function buildServer(ctx: AppContext): McpServer {
     },
     requireAuth(ctx, async (args) =>
       editReservation(ctx, args as Parameters<typeof editReservation>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_explore",
+    {
+      title: "Recommended attractions, restaurants, and categories for a destination",
+      description: exploreDescription,
+      inputSchema: exploreInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      explore(ctx, args as Parameters<typeof explore>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_get_travel_times",
+    {
+      title: "Travel time and distance between consecutive places in a day",
+      description: getTravelTimesDescription,
+      inputSchema: getTravelTimesInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      getTravelTimes(ctx, args as Parameters<typeof getTravelTimes>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_list_collaborators",
+    {
+      title: "List tripmates and pending invitations",
+      description: listCollaboratorsDescription,
+      inputSchema: listCollaboratorsInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      listCollaborators(ctx, args as Parameters<typeof listCollaborators>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_invite_collaborator",
+    {
+      title: "Invite people to a trip by email or username",
+      description: inviteCollaboratorDescription,
+      inputSchema: inviteCollaboratorInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      inviteCollaborator(ctx, args as Parameters<typeof inviteCollaborator>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_remove_collaborator",
+    {
+      title: "Remove a tripmate from a trip",
+      description: removeCollaboratorDescription,
+      inputSchema: removeCollaboratorInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      removeCollaborator(ctx, args as Parameters<typeof removeCollaborator>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_set_budget",
+    {
+      title: "Set the trip budget target and group-expense settings",
+      description: setBudgetDescription,
+      inputSchema: setBudgetInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      setBudget(ctx, args as Parameters<typeof setBudget>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_budget_summary",
+    {
+      title: "Spend vs. budget, by category/day/person, and balances",
+      description: budgetSummaryDescription,
+      inputSchema: budgetSummaryInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      budgetSummary(ctx, args as Parameters<typeof budgetSummary>[1])),
+  );
+
+  server.registerTool(
+    "wanderlog_add_restaurant_reservation",
+    {
+      title: "Record a restaurant reservation",
+      description: addRestaurantReservationDescription,
+      inputSchema: addRestaurantReservationInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    requireAuth(ctx, async (args) =>
+      addRestaurantReservation(ctx, args as Parameters<typeof addRestaurantReservation>[1])),
   );
 
   server.registerTool(

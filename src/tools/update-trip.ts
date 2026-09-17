@@ -21,12 +21,19 @@ export const updateTripInputSchema = {
     .describe(
       "Who can see the trip: 'private' (only you and invited collaborators), 'friends' (people you follow on Wanderlog), or 'public' (anyone with the link; may appear in Wanderlog's guide listings).",
     ),
+  default_travel_mode: z
+    .enum(["driving", "transit"])
+    .optional()
+    .describe(
+      "Default transportation used for the travel times shown between places: 'driving' (drive + walk short distances) or 'transit' (public transit + walk short distances).",
+    ),
 };
 
 export const updateTripDescription = `
-Updates a trip's top-level settings: its title and/or its privacy level.
+Updates a trip's top-level settings: title, privacy level, and/or default travel mode — the
+same fields as Wanderlog's "Trip settings" dialog.
 
-At least one of title or privacy must be provided. For date changes use
+At least one field must be provided. For date changes use
 wanderlog_update_trip_dates; for day headings use wanderlog_rename_day.
 `.trim();
 
@@ -34,6 +41,7 @@ type Args = {
   trip_key: string;
   title?: string;
   privacy?: Privacy;
+  default_travel_mode?: "driving" | "transit";
 };
 
 export async function updateTrip(
@@ -42,8 +50,8 @@ export async function updateTrip(
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
   try {
     const newTitle = args.title?.trim();
-    if (!newTitle && !args.privacy) {
-      throw new WanderlogValidationError("Provide at least one of title or privacy.");
+    if (!newTitle && !args.privacy && !args.default_travel_mode) {
+      throw new WanderlogValidationError("Provide at least one of title, privacy, or default_travel_mode.");
     }
 
     const result = await submitOp(ctx, args.trip_key, async (entry, submit) => {
@@ -58,6 +66,18 @@ export async function updateTrip(
       if (args.privacy && args.privacy !== trip.privacy) {
         ops.push({ p: ["privacy"], od: trip.privacy, oi: args.privacy });
         changes.push(`privacy: ${trip.privacy} → ${args.privacy}`);
+      }
+
+      if (args.default_travel_mode) {
+        const options = trip.itinerary.options;
+        const current = options?.defaultTravelMode ?? "driving";
+        if (current !== args.default_travel_mode) {
+          const next = { ...(options ?? {}), defaultTravelMode: args.default_travel_mode };
+          const op: Json0Op = { p: ["itinerary", "options"], oi: next };
+          if (options !== undefined) op.od = options;
+          ops.push(op);
+          changes.push(`default travel mode: ${current} → ${args.default_travel_mode}`);
+        }
       }
 
       if (ops.length === 0) {

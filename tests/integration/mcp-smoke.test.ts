@@ -87,7 +87,7 @@ describe("MCP stdio server (smoke)", () => {
     expect(p.pid).toBeDefined();
   });
 
-  it("responds to tools/list with all 42 tools", async () => {
+  it("responds to tools/list with all 50 tools", async () => {
     const p = startServer();
     await waitForReady(p);
     await initialize(p);
@@ -108,9 +108,11 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_add_journal",
       "wanderlog_add_note",
       "wanderlog_add_place",
+      "wanderlog_add_restaurant_reservation",
       "wanderlog_add_section",
       "wanderlog_add_transit",
       "wanderlog_annotate_place",
+      "wanderlog_budget_summary",
       "wanderlog_create_trip",
       "wanderlog_delete_section",
       "wanderlog_delete_trip",
@@ -119,16 +121,21 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_edit_journal",
       "wanderlog_edit_note",
       "wanderlog_edit_reservation",
+      "wanderlog_explore",
       "wanderlog_get_guide",
       "wanderlog_get_place_details",
+      "wanderlog_get_travel_times",
       "wanderlog_get_trip",
       "wanderlog_get_trip_forwarding_email",
       "wanderlog_get_trip_url",
+      "wanderlog_invite_collaborator",
+      "wanderlog_list_collaborators",
       "wanderlog_list_expenses",
       "wanderlog_list_journal",
       "wanderlog_list_trips",
       "wanderlog_move_block",
       "wanderlog_move_place",
+      "wanderlog_remove_collaborator",
       "wanderlog_remove_expense",
       "wanderlog_remove_journal",
       "wanderlog_remove_note",
@@ -139,6 +146,7 @@ describe("MCP stdio server (smoke)", () => {
       "wanderlog_search_guides",
       "wanderlog_search_hotels",
       "wanderlog_search_places",
+      "wanderlog_set_budget",
       "wanderlog_update_section",
       "wanderlog_update_trip",
       "wanderlog_update_trip_dates",

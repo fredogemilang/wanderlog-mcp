@@ -4,6 +4,7 @@ import { WanderlogError } from "../errors.js";
 import type { Json0Op } from "../ot/apply.js";
 import { resolvePlaceRef } from "../resolvers/place-ref.js";
 import { isPlaceBlock } from "../types.js";
+import { personLabel, resolvePerson, resolveSplitWith } from "./budget.js";
 import { generateBlockId, requireUserId, submitOp } from "./shared.js";
 
 export const addExpenseInputSchema = {
@@ -54,6 +55,18 @@ export const addExpenseInputSchema = {
     .regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD")
     .optional()
     .describe("Date of the expense, YYYY-MM-DD. Defaults to today if omitted."),
+  paid_by: z
+    .string()
+    .optional()
+    .describe(
+      "Who paid — a tripmate's name or username (see wanderlog_list_collaborators), or 'me'. Defaults to you.",
+    ),
+  split_with: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Who shares this cost: ['everyone'] for all tripmates, a list of names/usernames (include 'me' for yourself), or ['none'] to not split. Defaults to not split.",
+    ),
 };
 
 export const addExpenseDescription = `
@@ -62,6 +75,9 @@ on that place in the budget tracker; omit "place" to log a standalone (unlinked)
 
 Use this to give the trip a cost dimension — estimated meal costs, entrance fees, transport
 passes, etc. If you link a place, it must already exist in the trip.
+
+For group trips, set paid_by and split_with so wanderlog_budget_summary can work out who owes
+whom (the same "Paid by" / "Split" fields as the Wanderlog UI).
 
 Returns confirmation with the expense amount and description.
 `.trim();
@@ -74,6 +90,8 @@ type Args = {
   description: string;
   place?: string;
   date?: string;
+  paid_by?: string;
+  split_with?: string[];
 };
 
 export async function addExpense(
@@ -123,6 +141,9 @@ export async function addExpense(
         blockId = resolved.match.block.id;
         associatedDate = resolved.match.section.date;
       }
+      const payerId = args.paid_by ? resolvePerson(trip, args.paid_by, userId).id : userId;
+      const splitWith = resolveSplitWith(trip, args.split_with, userId)
+        ?? { type: "individuals", users: [] };
       const expense: Record<string, unknown> = {
         id: generateBlockId(),
         amount: {
@@ -132,9 +153,9 @@ export async function addExpense(
         category: args.category,
         description: args.description,
         date: expenseDate,
-        paidByUserId: userId,
-        paidByUser: { type: "registered", id: userId },
-        splitWith: { type: "individuals", users: [] },
+        paidByUserId: payerId,
+        paidByUser: { type: "registered", id: payerId },
+        splitWith,
         blockId,
         associatedDate: associatedDate ?? expenseDate,
       };
@@ -149,13 +170,19 @@ export async function addExpense(
         },
       ];
       await submit(ops);
-      return { tripTitle: trip.title };
+      const people: string[] = [];
+      if (args.paid_by) people.push(`paid by ${personLabel(trip, payerId, userId)}`);
+      if (splitWith.users.length > 0) {
+        people.push(`split ${splitWith.users.length === 1 ? "with" : "among"} ${splitWith.users.map((u) => personLabel(trip, u.id, userId)).join(", ")}`);
+      }
+      return { tripTitle: trip.title, people };
     });
     if ("response" in result && result.response) return result.response;
 
     const currencyLabel = args.currency.toUpperCase();
     const linkLabel = args.place ? ` (linked to ${args.place})` : "";
-    const text = `Added expense: ${currencyLabel} ${args.amount} for "${args.description}"${linkLabel} in "${result.tripTitle}".`;
+    const peopleLabel = result.people.length > 0 ? ` — ${result.people.join(", ")}` : "";
+    const text = `Added expense: ${currencyLabel} ${args.amount} for "${args.description}"${linkLabel} in "${result.tripTitle}"${peopleLabel}.`;
     return { content: [{ type: "text", text }] };
   } catch (err) {
     const msg =

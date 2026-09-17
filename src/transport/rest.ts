@@ -6,8 +6,13 @@ import {
   WanderlogNotFoundError,
 } from "../errors.js";
 import type {
+  DistanceLeg,
+  ExplorePage,
   Geo,
   GeoWithGoodGuides,
+  Invitee,
+  PlacesList,
+  RecommendedPlace,
   GuidesForGeoResponse,
   LodgingSearchResponse,
   PlaceData,
@@ -15,6 +20,7 @@ import type {
   TripPlan,
   TripPlanSummary,
   User,
+  UserSummary,
 } from "../types.js";
 
 type Envelope<T> = { success?: boolean } & T;
@@ -77,14 +83,23 @@ export class RestClient {
       );
     }
 
+    let parsed: T;
     try {
-      return (await response.json()) as T;
+      parsed = (await response.json()) as T;
     } catch (err) {
       throw new WanderlogError(
         `Failed to parse JSON from ${path}: ${(err as Error).message}`,
         "parse_error",
       );
     }
+    // Wanderlog reports application errors as HTTP 200 with success:false
+    // (e.g. "searchedCategory is not a valid type of place list").
+    const envelope = parsed as { success?: boolean; messages?: string[]; error?: string };
+    if (envelope && envelope.success === false) {
+      const detail = envelope.messages?.join("; ") ?? envelope.error ?? "unknown error";
+      throw new WanderlogError(`Wanderlog rejected ${method} ${path}: ${detail}`, "api_error");
+    }
+    return parsed;
   }
 
   async getUser(): Promise<User> {
@@ -381,6 +396,107 @@ export class RestClient {
     await this.request<Envelope<unknown>>("POST", "/api/sessionStore", {
       body: { key: "currencyPreference", value: currency },
     });
+  }
+
+  async getExplorePage(geoId: number, tripKey?: string): Promise<ExplorePage> {
+    const qs = tripKey ? `?tripPlanKey=${encodeURIComponent(tripKey)}` : "";
+    const env = await this.request<Envelope<{ data?: ExplorePage }>>(
+      "GET",
+      `/api/geo/${encodeURIComponent(String(geoId))}/explorePage${qs}`,
+    );
+    if (!env.data) throw new WanderlogNotFoundError("Explore page for geo", String(geoId));
+    return env.data;
+  }
+
+  /**
+   * Curated place list. `type` is the list's kind from the explore page
+   * (geoCategory, webPlacesList, itinerary, tripPlan); explore-page category
+   * ids double as geoCategory list ids.
+   */
+  async getPlacesList(type: string, listId: string | number, geoId: number): Promise<PlacesList> {
+    const env = await this.request<Envelope<{ data?: PlacesList }>>(
+      "GET",
+      `/api/placesList/${encodeURIComponent(type)}/${encodeURIComponent(String(listId))}?geoId=${encodeURIComponent(String(geoId))}`,
+    );
+    if (!env.data) throw new WanderlogNotFoundError("Places list", String(listId));
+    return env.data;
+  }
+
+  async getRecommendationsNear(args: {
+    tripPlanId: number;
+    geoId: number;
+    longitude: number;
+    latitude: number;
+    excludingPlaceIds: string[];
+  }): Promise<RecommendedPlace[]> {
+    const env = await this.request<Envelope<{ data?: RecommendedPlace[] }>>(
+      "POST",
+      "/api/recommendations/v2",
+      {
+        body: {
+          tripPlanId: args.tripPlanId,
+          geoId: args.geoId,
+          input: {
+            type: "nearestLngLat",
+            nearestLngLat: { longitude: args.longitude, latitude: args.latitude },
+          },
+          excludingPlaceIds: args.excludingPlaceIds,
+        },
+      },
+    );
+    return env.data ?? [];
+  }
+
+  /**
+   * Route legs between consecutive places in each run. Response is keyed by
+   * the JSON-encoded tuple `[fromPlaceId, toPlaceId, travelMode]`.
+   */
+  async getDistances(args: {
+    placeRuns: Array<{
+      sectionId: number;
+      places: Array<{ id: string; longitude: number; latitude: number }>;
+    }>;
+    travelMode: "driving" | "transit" | "walking";
+  }): Promise<Record<string, DistanceLeg>> {
+    const env = await this.request<Envelope<{ data?: Record<string, DistanceLeg> }>>(
+      "POST",
+      "/api/directions/distancesForMode",
+      { body: args },
+    );
+    return env.data ?? {};
+  }
+
+  async userAutocomplete(query: string): Promise<UserSummary[]> {
+    const env = await this.request<Envelope<{ data?: UserSummary[] }>>(
+      "GET",
+      `/api/user/autocomplete/${encodeURIComponent(query)}`,
+    );
+    return env.data ?? [];
+  }
+
+  async inviteToTrip(tripKey: string, invitees: Invitee[], message: string): Promise<unknown> {
+    const env = await this.request<Envelope<{ data?: unknown }>>(
+      "POST",
+      `/api/tripPlans/${encodeURIComponent(tripKey)}/invite`,
+      { body: { invitees, message } },
+    );
+    return env.data;
+  }
+
+  async listInvites(tripKey: string): Promise<unknown[]> {
+    const env = await this.request<Envelope<{ data?: unknown[] }>>(
+      "GET",
+      `/api/tripPlans/${encodeURIComponent(tripKey)}/invites`,
+    );
+    return env.data ?? [];
+  }
+
+  async removeCollaborator(tripKey: string, userId: number): Promise<void> {
+    await this.request<Envelope<unknown>>(
+      "DELETE",
+      `/api/tripPlans/${encodeURIComponent(tripKey)}/collaborator`,
+      { body: { userId } },
+    );
   }
 
   async deleteTrip(tripKey: string): Promise<void> {

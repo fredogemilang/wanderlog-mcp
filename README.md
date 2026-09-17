@@ -23,6 +23,12 @@ The agent calls the tools, interleaves places and notes for each day, adds hotel
 - `wanderlog_get_place_details` — opening hours, rating, phone, website, and a Google Maps link for any place, in the trip or not.
 - `wanderlog_edit_checklist` — tick/untick, add, remove, and rename items on an existing checklist.
 - `wanderlog_edit_reservation` — change confirmation numbers, traveler names, times/dates, carrier/airline, and notes on flights, trains/ferries/buses, rental cars, and hotel stays without re-adding them.
+- `wanderlog_explore` — Wanderlog's curated "Explore" recommendations for a destination: top attractions/restaurants, 90+ categories (temples, cafes, bakeries, kid-friendly…), ratings, visit durations, and "near the hotel" suggestions.
+- `wanderlog_get_travel_times` — drive / transit / walk time and distance between consecutive places in a day, as shown in the Wanderlog UI.
+- `wanderlog_list_collaborators`, `wanderlog_invite_collaborator`, `wanderlog_remove_collaborator` — manage tripmates by email or username.
+- `wanderlog_set_budget` + `wanderlog_budget_summary` — budget target, "simplify group expenses", spend by category/day/person, and who-owes-whom balances. `wanderlog_add_expense` / `wanderlog_edit_expense` gained `paid_by` and `split_with`.
+- `wanderlog_add_restaurant_reservation` — record a restaurant booking (date, time, party size, confirmation) in the Restaurant reservations section.
+- `wanderlog_update_trip` also sets the default travel mode (driving / transit).
 - Merged upstream: `wanderlog_move_place` (move places across days/lists keeping notes and times), `wanderlog_reorder_places`, `wanderlog_reorder_sections`, and `place_id` support in `wanderlog_add_place`.
 
 - Place and custom-list ordering tools support explicit 1-based positions with safe boundary validation.
@@ -91,6 +97,18 @@ and a ryokan in Shinjuku."
 ```
 "Remove the Colosseum from day 2 of my Rome trip."
 ```
+```
+"What are the best temples and cafes in Kyoto? Add the top three temples to day 2."
+```
+```
+"How long will we spend travelling on day 3 by public transit?"
+```
+```
+"Log 12,000 yen for dinner, I paid, split with everyone — and who owes whom so far?"
+```
+```
+"Invite sam@example.com to my Bali trip."
+```
 
 ## Tools
 
@@ -102,11 +120,16 @@ and a ryokan in Shinjuku."
 | `wanderlog_get_trip_forwarding_email` | Get a trip's `trip+<id>@wanderlog.com` import address |
 | `wanderlog_search_places` | Find real-world places near a trip's destination |
 | `wanderlog_get_place_details` | Opening hours, rating, phone, website, and map link for a place |
+| `wanderlog_explore` | Curated recommendations for the destination: top attractions/restaurants, categories, or places near a spot in the trip |
+| `wanderlog_get_travel_times` | Travel time & distance between consecutive places in a day (driving / transit / walking) |
 | `wanderlog_search_guides` | List user-written travel guides for a destination, with fallback suggestions when none exist |
 | `wanderlog_get_guide` | Read the full content of a public Wanderlog guide (sections, places, notes) |
 | `wanderlog_search_hotels` | Search Wanderlog's hotel aggregator (airbnb/expedia/google/kayak) with per-vendor deal comparison |
 | `wanderlog_create_trip` | Create a new trip with destination + date range |
-| `wanderlog_update_trip` | Rename a trip or change its privacy (private / friends / public) |
+| `wanderlog_update_trip` | Rename a trip, change its privacy (private / friends / public), or its default travel mode |
+| `wanderlog_list_collaborators` | List tripmates and pending invitations |
+| `wanderlog_invite_collaborator` | Invite people by email or Wanderlog username |
+| `wanderlog_remove_collaborator` | Remove a tripmate |
 | `wanderlog_delete_trip` | Permanently delete a trip (requires the exact title as confirmation) |
 | `wanderlog_add_place` | Add a place to a specific day or general list |
 | `wanderlog_add_note` | Add a note (transit tips, booking info, local advice) |
@@ -116,13 +139,16 @@ and a ryokan in Shinjuku."
 | `wanderlog_add_flight` | Add a flight booking (airline, flight number, depart/arrive airports, dates, times) |
 | `wanderlog_add_transit` | Add a ferry, bus, or train leg (carrier, from/to, dates/times) to the shared Transit section |
 | `wanderlog_add_car_rental` | Add a rental car with pick-up/drop-off locations and times |
+| `wanderlog_add_restaurant_reservation` | Record a restaurant booking (date, time, party size, confirmation) |
 | `wanderlog_edit_reservation` | Edit confirmation number, travelers, dates/times, carrier, or notes on a flight, transit, rental car, or hotel stay |
 | `wanderlog_add_checklist` | Add a pre-trip or per-day checklist |
 | `wanderlog_edit_checklist` | Tick/untick, add, remove, or rename items on an existing checklist |
-| `wanderlog_add_expense` | Log a budget expense (amount, category, currency), optionally linked to a place |
+| `wanderlog_add_expense` | Log a budget expense (amount, category, currency), optionally linked to a place, with `paid_by` / `split_with` for group trips |
+| `wanderlog_set_budget` | Set the trip budget target and the 'simplify group expenses' toggle |
+| `wanderlog_budget_summary` | Spend vs. target, by category / day / payer, and who-owes-whom balances |
 | `wanderlog_list_expenses` | List budget expenses, optionally filtered by description / date / amount / currency |
 | `wanderlog_remove_expense` | Remove a budget expense by description (with optional date / amount / currency filters) |
-| `wanderlog_edit_expense` | Change a budget expense's description, amount, currency, category, or date |
+| `wanderlog_edit_expense` | Change a budget expense's description, amount, currency, category, date, payer, or split |
 | `wanderlog_annotate_place` | Update an existing place with a note, start/end time, or both |
 | `wanderlog_remove_place` | Remove a place by natural-language reference |
 | `wanderlog_move_block` | Move an existing place or reservation block within its current section |
